@@ -1,6 +1,7 @@
 interface SlackAppMentionEvent {
   type: "app_mention"
   user: string
+  thread_ts?: string
   ts: string
   client_msg_id: string
   text: string

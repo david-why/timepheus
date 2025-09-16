@@ -45,3 +45,42 @@ export async function getUserInfo(userId: string) {
   }
   return data.user
 }
+
+interface PostMessageParams {
+  channel: string
+  markdown_text?: string
+  thread_ts?: string
+  blocks?: unknown[]
+}
+
+interface PostMessageResponse {
+  ok: true
+}
+
+export async function postMessage(parameters: PostMessageParams) {
+  const stringifiedParams = {
+    ...parameters,
+    blocks: parameters.blocks ? JSON.stringify(parameters.blocks) : undefined,
+  }
+  for (const key in stringifiedParams) {
+    if (
+      stringifiedParams[key as keyof typeof stringifiedParams] === undefined
+    ) {
+      delete stringifiedParams[key as keyof typeof stringifiedParams]
+    }
+  }
+  const body = new URLSearchParams(stringifiedParams as Record<string, string>).toString()
+  const res = await fetch(`https://slack.com/api/chat.postMessage`, {
+    method: 'POST',
+    body,
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: `Bearer ${SLACK_BOT_OAUTH_TOKEN}`,
+    },
+  })
+  const data = (await res.json()) as PostMessageResponse | ErrorResponse
+  if (!data.ok) {
+    console.error(data)
+    throw new Error(`Slack chat.postMessage API returned error: ${data.error}`)
+  }
+}

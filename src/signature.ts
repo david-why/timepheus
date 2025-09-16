@@ -10,7 +10,7 @@ function sign(basestring: string) {
 export async function getVerifiedData(
   req: Request,
 ): Promise<
-  { success: false; data?: never } | { success: true; data: SlackRequest }
+  { success: false; data?: never } | { success: true; data: string }
 > {
   const body = await req.clone().text()
   const signature = req.headers.get("x-slack-signature")
@@ -23,5 +23,5 @@ export async function getVerifiedData(
   const basestring = `v0:${timestamp}:${body}`
   const correctSignature = sign(basestring)
   if (signature !== correctSignature) return { success: false }
-  return { success: true, data: JSON.parse(body) }
+  return { success: true, data: body }
 }

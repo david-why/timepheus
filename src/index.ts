@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon'
 import { getVerifiedData } from './signature'
-import { getUserInfo } from './slack'
+import { getUserInfo, postMessage } from './slack'
 
 const PORT = Number(process.env.PORT || 3000)
 
@@ -14,10 +14,20 @@ function toNumberOrUndefined(text: string | undefined) {
   return num
 }
 
-async function handleEvent(event: SlackEvent, data: SlackEventCallbackRequest): Promise<void> {
+async function handleEvent(event: SlackEvent): Promise<void> {
   if (event.type === 'app_mention') {
+    if (!TIME_REGEX.test(event.text)) {
+      await postMessage({
+        channel: event.channel,
+        markdown_text: `<@${event.user}>: _timepheus sighed exasperatedly._ *WHY DID YOU PING ME???*`,
+        thread_ts: event.thread_ts,
+      })
+      return
+    }
     const user = await getUserInfo(event.user)
-    let text = ''
+    let text = `<@${event.user}>\n`
+    TIME_REGEX.lastIndex = 0
+    const dts: number[] = []
     for (const match of event.text.matchAll(TIME_REGEX)) {
       const [segment, fmt, y, m, d, H, M, S] = match
       console.log(y, m, d, H, M, S)
@@ -53,29 +63,61 @@ async function handleEvent(event: SlackEvent, data: SlackEventCallbackRequest): 
             timeCount
           ],
         })
+        dts.push(dt.toMillis())
       }
-      text += `${segment}: ${segmentText}\n`
+      text += `\`${segment}\`: ${segmentText}\n`
     }
     text = text.trim()
     console.log(text)
-    console.log(JSON.stringify(data, null, 2))
+    await postMessage({
+      channel: event.channel,
+      blocks: [
+        { type: 'markdown', text: text },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: 'convert to my timezone' },
+              action_id: 'timepheus_privtime',
+              value: JSON.stringify(dts),
+            },
+          ],
+        },
+      ],
+      thread_ts: event.thread_ts,
+    })
   }
 }
+
+async function handleInteractivity() {}
 
 Bun.serve({
   routes: {
     '/slack/events-endpoint': async (req) => {
       const verified = await getVerifiedData(req)
       if (!verified.success) return new Response(null, { status: 500 })
-      const { data } = verified
-      console.log(JSON.stringify(data))
+      const { data: jsonData } = verified
+      console.log(jsonData)
+      const data = JSON.parse(jsonData)
 
       if (data.type === 'url_verification') {
         return new Response(data.challenge)
       } else if (data.type === 'event_callback') {
-        handleEvent(data.event, data) // intentionally not awaited
+        handleEvent(data.event) // intentionally not awaited
         return new Response()
       }
+      return new Response()
+    },
+    '/slack/interactivity-endpoint': async (req) => {
+      const verified = await getVerifiedData(req)
+      if (!verified.success) return new Response(null, { status: 500 })
+      const { data: encodedData } = verified
+
+      const params = new URLSearchParams(encodedData)
+      const payload = params.get('payload')!
+      const data = JSON.parse(payload)
+      console.log(params)
       return new Response()
     },
   },
