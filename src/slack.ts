@@ -17,6 +17,7 @@ interface GetUserInfoResponse {
     tz: string
     tz_label: string
     tz_offset: number
+    locale: string
     profile: {
       avatar_hash: string
       display_name: string
@@ -30,11 +31,14 @@ interface GetUserInfoResponse {
 }
 
 export async function getUserInfo(userId: string) {
-  const res = await fetch(`https://slack.com/api/users.info?user=${userId}`, {
-    headers: {
-      authorization: `Bearer ${SLACK_BOT_OAUTH_TOKEN}`,
+  const res = await fetch(
+    `https://slack.com/api/users.info?include_locale=true&user=${userId}`,
+    {
+      headers: {
+        authorization: `Bearer ${SLACK_BOT_OAUTH_TOKEN}`,
+      },
     },
-  })
+  )
   const data = (await res.json()) as GetUserInfoResponse | ErrorResponse
   if (!data.ok) {
     throw new Error(`Slack API returned error: ${data.error}`)
