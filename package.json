@@ -8,9 +8,13 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/luxon": "^3.7.1",
     "prettier": "^3.6.2"
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "luxon": "^3.7.2"
   }
 }

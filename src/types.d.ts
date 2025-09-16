@@ -1,5 +1,5 @@
 interface SlackAppMentionEvent {
-  type: 'app_mention'
+  type: "app_mention"
   user: string
   ts: string
   client_msg_id: string
@@ -24,7 +24,7 @@ interface SlackUrlVerificationRequest extends SlackBaseRequest {
 }
 
 interface SlackEventCallbackRequest extends SlackBaseRequest {
-  type: 'event_callback'
+  type: "event_callback"
   team_id: string
   api_app_id: string
   event: SlackEvent
@@ -32,4 +32,4 @@ interface SlackEventCallbackRequest extends SlackBaseRequest {
   event_time: number
 }
 
-type SlackRequest = SlackUrlVerificationRequest
+type SlackRequest = SlackUrlVerificationRequest | SlackEventCallbackRequest
