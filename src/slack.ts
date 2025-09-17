@@ -51,6 +51,8 @@ interface PostMessageParams {
   markdown_text?: string
   thread_ts?: string
   blocks?: unknown[]
+  ephemeral?: boolean
+  user?: string
 }
 
 interface PostMessageResponse {
@@ -61,6 +63,7 @@ export async function postMessage(parameters: PostMessageParams) {
   const stringifiedParams = {
     ...parameters,
     blocks: parameters.blocks ? JSON.stringify(parameters.blocks) : undefined,
+    ephemeral: undefined as string | undefined,
   }
   for (const key in stringifiedParams) {
     if (
@@ -69,15 +72,22 @@ export async function postMessage(parameters: PostMessageParams) {
       delete stringifiedParams[key as keyof typeof stringifiedParams]
     }
   }
-  const body = new URLSearchParams(stringifiedParams as Record<string, string>).toString()
-  const res = await fetch(`https://slack.com/api/chat.postMessage`, {
-    method: 'POST',
-    body,
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Bearer ${SLACK_BOT_OAUTH_TOKEN}`,
+  const body = new URLSearchParams(
+    stringifiedParams as Record<string, string>,
+  ).toString()
+  const res = await fetch(
+    parameters.ephemeral
+      ? `https://slack.com/api/chat.postEphemeral`
+      : `https://slack.com/api/chat.postMessage`,
+    {
+      method: 'POST',
+      body,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Bearer ${SLACK_BOT_OAUTH_TOKEN}`,
+      },
     },
-  })
+  )
   const data = (await res.json()) as PostMessageResponse | ErrorResponse
   if (!data.ok) {
     console.error(data)

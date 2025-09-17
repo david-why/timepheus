@@ -1,5 +1,7 @@
+// slack events api events
+
 interface SlackAppMentionEvent {
-  type: "app_mention"
+  type: 'app_mention'
   user: string
   thread_ts?: string
   ts: string
@@ -20,12 +22,12 @@ interface SlackBaseRequest {
 }
 
 interface SlackUrlVerificationRequest extends SlackBaseRequest {
-  type: "url_verification"
+  type: 'url_verification'
   challenge: string
 }
 
 interface SlackEventCallbackRequest extends SlackBaseRequest {
-  type: "event_callback"
+  type: 'event_callback'
   team_id: string
   api_app_id: string
   event: SlackEvent
@@ -34,3 +36,32 @@ interface SlackEventCallbackRequest extends SlackBaseRequest {
 }
 
 type SlackRequest = SlackUrlVerificationRequest | SlackEventCallbackRequest
+
+// slack interactivity events
+
+interface SlackBlockActionsInteraction {
+  type: 'block_actions'
+  user: {
+    id: string
+    // ...
+  }
+  channel: {
+    id: string
+    // ...
+  },
+  message: {
+    user: string
+    ts: string
+    thread_ts?: string
+    // ...
+  }
+  response_url: stirng
+  actions: {
+    action_id: string
+    value: string
+    // ...
+  }[]
+  // ...
+}
+
+type SlackInteraction = SlackBlockActionsInteraction

@@ -19,15 +19,15 @@ async function handleEvent(event: SlackEvent): Promise<void> {
     if (!TIME_REGEX.test(event.text)) {
       await postMessage({
         channel: event.channel,
-        markdown_text: `<@${event.user}>: _timepheus sighed exasperatedly._ *WHY DID YOU PING ME???*`,
+        markdown_text: `_timepheus sighed exasperatedly._ **WHY DID YOU PING ME???** i'm so busy and i keep getting harassed by people like you...!!`,
         thread_ts: event.thread_ts,
       })
       return
     }
     const user = await getUserInfo(event.user)
-    let text = `<@${event.user}>\n`
+    let text = ``
     TIME_REGEX.lastIndex = 0
-    const dts: number[] = []
+    const dts: [string, number, number, number][] = []
     for (const match of event.text.matchAll(TIME_REGEX)) {
       const [segment, fmt, y, m, d, H, M, S] = match
       console.log(y, m, d, H, M, S)
@@ -63,7 +63,7 @@ async function handleEvent(event: SlackEvent): Promise<void> {
             timeCount
           ],
         })
-        dts.push(dt.toMillis())
+        dts.push([segment, dateCount, timeCount, dt.toMillis()])
       }
       text += `\`${segment}\`: ${segmentText}\n`
     }
@@ -90,7 +90,38 @@ async function handleEvent(event: SlackEvent): Promise<void> {
   }
 }
 
-async function handleInteractivity() {}
+async function handleInteractivity(interaction: SlackInteraction) {
+  if (interaction.type == 'block_actions') {
+    const id = interaction.actions[0]?.action_id
+    if (id === 'timepheus_privtime') {
+      const user = await getUserInfo(interaction.user.id)
+      const timestamps: [string, number, number, number][] = JSON.parse(
+        interaction.actions[0]!.value,
+      )
+      let text = ''
+      for (const [segment, dateCount, timeCount, timestamp] of timestamps) {
+        const dt = DateTime.fromMillis(timestamp, { zone: user.tz })
+        const segmentText = dt.toLocaleString({
+          dateStyle: ([undefined, 'short', 'medium', 'long', 'full'] as const)[
+            dateCount
+          ],
+          timeStyle: ([undefined, 'short', 'medium', 'long', 'full'] as const)[
+            timeCount
+          ],
+        })
+        text += `\`${segment}\`: ${segmentText}\n`
+      }
+      text = text.trim()
+      await postMessage({
+        channel: interaction.channel.id,
+        markdown_text: text,
+        thread_ts: interaction.message.thread_ts,
+        ephemeral: true,
+        user: interaction.user.id
+      })
+    }
+  }
+}
 
 Bun.serve({
   routes: {
@@ -116,8 +147,10 @@ Bun.serve({
 
       const params = new URLSearchParams(encodedData)
       const payload = params.get('payload')!
-      const data = JSON.parse(payload)
-      console.log(params)
+      const data = JSON.parse(payload) as SlackInteraction
+      console.log(data)
+
+      handleInteractivity(data)
       return new Response()
     },
   },
