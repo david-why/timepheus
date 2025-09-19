@@ -13,7 +13,18 @@ interface SlackAppMentionEvent {
   event_ts: string
 }
 
-type SlackEvent = SlackAppMentionEvent
+interface SlackMessageEvent {
+  type: 'message'
+  user: string
+  ts: string
+  text: string
+  thread_ts: string
+  channel: string
+  app_id?: string
+  // ...
+}
+
+type SlackEvent = SlackAppMentionEvent | SlackMessageEvent
 
 // request bodies sent by slack to our endpoint
 
@@ -53,6 +64,7 @@ interface SlackBlockActionsInteraction {
     user: string
     ts: string
     thread_ts?: string
+    text: string
     // ...
   }
   response_url: stirng
