@@ -1,18 +1,26 @@
 import { DateTime } from 'luxon'
 import { getVerifiedData } from './signature'
-import { getUserInfo, postMessage } from './slack'
+import { authTest, getUserInfo, postMessage } from './slack'
 
 const PORT = Number(process.env.PORT || 3000)
 
 const TIME_REGEX =
   /\{(.*?!)?(?:(?:(\d{4})\/)?(\d{1,2})\/(\d{1,2})\s*)?(?:(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?\}/g
 
-const { SLACK_APP_ID } = process.env
+const { SLACK_APP_ID, SLACK_BOT_OAUTH_TOKEN } = process.env
 
 if (!SLACK_APP_ID) {
   console.error('SLACK_APP_ID not set')
   process.exit(1)
 }
+if (!SLACK_BOT_OAUTH_TOKEN) {
+  console.error('SLACK_BOT_OAUTH_TOKEN not set')
+  process.exit(1)
+}
+
+console.log('Fetching user ID')
+const botUserId = (await authTest()).user_id
+console.log(`Bot user ID is ${botUserId}`)
 
 function toNumberOrUndefined(text: string | undefined) {
   if (!text) return undefined
@@ -110,7 +118,7 @@ async function handleEvent(event: SlackEvent): Promise<void> {
   if (event.type === 'app_mention') {
     await handleTimeMessage(event, event.user)
   } else if (event.type === 'message') {
-    if (!event.text.includes(`<@${SLACK_APP_ID}>`) && event.app_id !== SLACK_APP_ID) {
+    if (!event.text.includes(`<@${botUserId}>`) && event.app_id !== SLACK_APP_ID) {
       await handleTimeMessage(event, event.user, { passive: true })
     }
   }

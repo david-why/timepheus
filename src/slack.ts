@@ -94,3 +94,27 @@ export async function postMessage(parameters: PostMessageParams) {
     throw new Error(`Slack chat.postMessage API returned error: ${data.error}`)
   }
 }
+
+interface AuthTestResponse {
+  ok: true
+  url: string
+  team: string
+  user: string
+  team_id: string
+  user_id: string
+}
+
+export async function authTest() {
+  const res = await fetch(`https://slack.com/api/auth.test`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${SLACK_BOT_OAUTH_TOKEN}`,
+    },
+  })
+  const data = (await res.json()) as AuthTestResponse | ErrorResponse
+  if (!data.ok) {
+    console.error(data)
+    throw new Error(`Slack auth.test API returned error: ${data.error}`)
+  }
+  return data
+}
