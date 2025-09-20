@@ -1,12 +1,8 @@
-import { DateTime } from 'luxon'
 import { getVerifiedData } from './signature'
 import { authTest, getUserInfo, postMessage } from './slack'
 import * as chrono from 'chrono-node'
 
 const PORT = Number(process.env.PORT || 3000)
-
-const TIME_REGEX =
-  /\{([dt]*?)?(?:(?:(\d{4})\/)?(\d{1,2})\/(\d{1,2})\s*)?(?:(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?\}/g
 
 const { SLACK_APP_ID, SLACK_BOT_OAUTH_TOKEN } = process.env
 
@@ -23,13 +19,6 @@ console.log('Fetching user ID')
 const botUserId = (await authTest()).user_id
 console.log(`Bot user ID is ${botUserId}`)
 
-function toNumberOrUndefined(text: string | undefined) {
-  if (!text) return undefined
-  const num = Number(text)
-  if (isNaN(num)) return undefined
-  return num
-}
-
 interface Message {
   ts: string
   text: string
@@ -39,14 +28,10 @@ interface Message {
   // and other stuff we don't care about
 }
 
-function getMessageURL(message: Message) {
-  return `https://hackclub.slack.com/archives/${message.channel}/p${message.ts}`
-}
-
 interface PrivTimeValue {
   c: string
   t?: string
-  d: [string, number][]
+  d: [string, number, number | null][]
 }
 
 async function checkPostedMessage(message: Message) {
@@ -54,9 +39,20 @@ async function checkPostedMessage(message: Message) {
   const user = await getUserInfo(userId)
   const results = chrono.parse(text, { timezone: user.tz })
   if (!results.length) return
-  const data: [string, number][] = []
+  const data: PrivTimeValue['d'] = []
   for (const result of results) {
-    data.push([result.text, Math.floor(result.date().getTime() / 1000)])
+    if (
+      !result.start.isCertain('hour') &&
+      !result.start.isCertain('minute') &&
+      !result.start.isCertain('second')
+    )
+      return
+    console.log(result.start.date(), result.end?.date())
+    data.push([
+      result.text,
+      Math.floor(result.start.date().getTime() / 1000),
+      result.end ? Math.floor(result.end.date().getTime() / 1000) : null,
+    ])
   }
   await postMessage({
     channel,
@@ -88,22 +84,36 @@ async function sendLocalMessage(value: string, userId: string) {
     d: data,
   } = JSON.parse(value) as PrivTimeValue
   const block: SlackRichTextBlock = { type: 'rich_text', elements: [] }
-  for (const [segment, timestamp] of data) {
-    block.elements.push({
-      type: 'rich_text_section',
-      elements: [
-        {
-          type: 'text',
-          text: `\`${segment}\`: `,
-        },
+  for (const [segment, tsStart, tsEnd] of data) {
+    const elements: SlackRichTextElement[] = [
+      {
+        type: 'text',
+        text: segment,
+        style: { code: true },
+      },
+      {
+        type: 'text',
+        text: ': ',
+      },
+      {
+        type: 'date',
+        timestamp: tsStart,
+        format: '{date_slash} at {time} ({ago})',
+        fallback: '<Failed to display time>',
+      },
+    ]
+    if (typeof tsEnd === 'number') {
+      elements.push(
+        { type: 'text', text: ' to ' },
         {
           type: 'date',
-          timestamp,
+          timestamp: tsEnd,
           format: '{date_slash} at {time} ({ago})',
           fallback: '<Failed to display time>',
         },
-      ],
-    })
+      )
+    }
+    block.elements.push({ type: 'rich_text_section', elements })
   }
   console.log(block.elements[0]?.elements)
   await postMessage({
@@ -119,10 +129,7 @@ async function handleEvent(event: SlackEvent): Promise<void> {
   if (event.type === 'app_mention') {
     await checkPostedMessage(event)
   } else if (event.type === 'message') {
-    if (
-      !event.text.includes(`<@${botUserId}>`) &&
-      event.app_id !== SLACK_APP_ID
-    ) {
+    if (!event.app_id && !event.text.includes(`<@${botUserId}>`)) {
       await checkPostedMessage(event)
     }
   }
