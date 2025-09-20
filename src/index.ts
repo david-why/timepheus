@@ -1,5 +1,5 @@
 import { getVerifiedData } from './signature'
-import { authTest, getUserInfo, postMessage } from './slack'
+import { addReaction, authTest, getUserInfo, postMessage } from './slack'
 import * as chrono from 'chrono-node'
 
 const PORT = Number(process.env.PORT || 3000)
@@ -54,27 +54,34 @@ async function checkPostedMessage(message: Message) {
       result.end ? Math.floor(result.end.date().getTime() / 1000) : null,
     ])
   }
-  await postMessage({
-    channel,
-    blocks: [
-      {
-        type: 'actions',
-        elements: [
-          {
-            type: 'button',
-            text: { type: 'plain_text', text: 'convert to my timezone' },
-            action_id: 'timepheus_privtime3',
-            value: JSON.stringify({
-              c: channel,
-              t: thread_ts,
-              d: data,
-            } satisfies PrivTimeValue),
-          },
-        ],
-      },
-    ],
-    thread_ts,
-  })
+  await Promise.all([
+    addReaction({
+      channel,
+      name: 'tw_alarm_clock',
+      timestamp: message.ts,
+    }),
+    postMessage({
+      channel,
+      blocks: [
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: 'convert to my timezone' },
+              action_id: 'timepheus_privtime3',
+              value: JSON.stringify({
+                c: channel,
+                t: thread_ts,
+                d: data,
+              } satisfies PrivTimeValue),
+            },
+          ],
+        },
+      ],
+      thread_ts,
+    }),
+  ])
 }
 
 async function sendLocalMessage(value: string, userId: string) {

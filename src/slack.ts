@@ -118,3 +118,33 @@ export async function authTest() {
   }
   return data
 }
+
+interface AddReactionParams {
+  channel: string
+  name: string
+  timestamp: string
+}
+
+interface AddReactionResponse {
+  ok: true
+}
+
+export async function addReaction(params: AddReactionParams) {
+  const bodyBuilder = new URLSearchParams()
+  bodyBuilder.set('channel', params.channel)
+  bodyBuilder.set('name', params.name)
+  bodyBuilder.set('timestamp', params.timestamp)
+  const res = await fetch(`https://slack.com/api/reactions.add`, {
+    method: 'POST',
+    body: bodyBuilder.toString(),
+    headers: {
+      Authorization: `Bearer ${SLACK_BOT_OAUTH_TOKEN}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+  })
+  const data = (await res.json()) as AddReactionResponse | ErrorResponse
+  if (!data.ok) {
+    console.error(data)
+    throw new Error(`Slack auth.test API returned error: ${data.error}`)
+  }
+}
