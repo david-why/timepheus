@@ -27,7 +27,23 @@ interface SlackRichTextDateElement {
   fallback?: string
 }
 
-type SlackRichTextElement = SlackRichTextTextElement | SlackRichTextDateElement
+interface SlackRichTextUserElement {
+  type: 'user'
+  user_id: string
+  style?: {
+    bold?: boolean
+    italic?: boolean
+    strike?: boolean
+    highlight?: boolean
+    client_highlight?: boolean
+    unlink?: boolean
+  }
+}
+
+type SlackRichTextElement =
+  | SlackRichTextTextElement
+  | SlackRichTextDateElement
+  | SlackRichTextUserElement
 
 interface SlackActionsBlock {
   type: 'actions'

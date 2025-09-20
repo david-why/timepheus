@@ -87,28 +87,34 @@ function parseMessageData({
 }
 
 async function checkPostedMessage(message: Message) {
-  const { text, channel, user: userId } = message
+  const { text, channel, ts, thread_ts, user: userId } = message
   const user = await getUserInfo(userId)
   const data = parseMessageData({ text, tz: user.tz })
   if (!data.length) return
-  await addReaction({
-    channel,
-    name: REACTION_EMOJI,
-    timestamp: message.ts,
-  })
+  await Promise.all([
+    addReaction({
+      channel,
+      name: REACTION_EMOJI,
+      timestamp: message.ts,
+    }),
+    sendLocalMessage({ user: userId, ts, channel, thread_ts, data }),
+  ])
 }
 
 async function sendLocalMessage(
   {
     channel,
     thread_ts,
+    ts,
     data,
   }: {
+    user: string
     channel: string
     thread_ts?: string
+    ts: string
     data: [string, number, number | null][]
   },
-  userId: string,
+  { userId, ephemeral = false }: { userId?: string; ephemeral?: boolean } = {},
 ) {
   if (!data) return
   const block: SlackRichTextBlock = { type: 'rich_text', elements: [] }
@@ -145,8 +151,8 @@ async function sendLocalMessage(
   }
   await postMessage({
     channel,
-    thread_ts,
-    ephemeral: true,
+    thread_ts: thread_ts ?? ts,
+    ephemeral,
     user: userId,
     blocks: [block],
   })
@@ -163,14 +169,16 @@ async function checkMessageReaction(event: SlackReactionAddedEvent) {
   const user = await getUserInfo(event.item_user)
   await sendLocalMessage(
     {
+      user: event.item_user,
       channel: event.item.channel,
+      ts: event.item.ts,
       thread_ts: event.item.thread_ts,
       data: parseMessageData({
         text: message.text,
         tz: user.tz,
       }),
     },
-    event.user,
+    { userId: event.user, ephemeral: true },
   )
 }
 
@@ -184,28 +192,6 @@ async function handleEvent(event: SlackEvent): Promise<void> {
   } else if (event.type === 'reaction_added') {
     if (event.user !== botUserId) {
       await checkMessageReaction(event)
-    }
-  }
-}
-
-async function handleInteractivity(interaction: SlackInteraction) {
-  if (interaction.type == 'block_actions') {
-    const id = interaction.actions[0]?.action_id
-    if (id === 'timepheus_privtime3') {
-      const {
-        c: channel,
-        t: thread_ts,
-        d: data,
-      } = JSON.parse(interaction.actions[0]!.value) as PrivTimeValue
-      await sendLocalMessage({ channel, thread_ts, data }, interaction.user.id)
-    } else {
-      await postMessage({
-        channel: interaction.channel.id,
-        thread_ts: interaction.message.thread_ts,
-        ephemeral: true,
-        user: interaction.user.id,
-        markdown_text: `_timepheus looks at you with a pleading face._ i don't understand that, sowwy :pleading_face:`,
-      })
     }
   }
 }
@@ -224,18 +210,6 @@ Bun.serve({
         handleEvent(data.event) // intentionally not awaited
         return new Response()
       }
-      return new Response()
-    },
-    '/slack/interactivity-endpoint': async (req) => {
-      const verified = await getVerifiedData(req)
-      if (!verified.success) return new Response(null, { status: 500 })
-      const { data: encodedData } = verified
-
-      const params = new URLSearchParams(encodedData)
-      const payload = params.get('payload')!
-      const data = JSON.parse(payload) as SlackInteraction
-
-      handleInteractivity(data)
       return new Response()
     },
   },
