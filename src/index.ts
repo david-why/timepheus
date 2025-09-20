@@ -5,7 +5,7 @@ import { authTest, getUserInfo, postMessage } from './slack'
 const PORT = Number(process.env.PORT || 3000)
 
 const TIME_REGEX =
-  /\{(.*?!)?(?:(?:(\d{4})\/)?(\d{1,2})\/(\d{1,2})\s*)?(?:(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?\}/g
+  /\{([dt]*?)?(?:(?:(\d{4})\/)?(\d{1,2})\/(\d{1,2})\s*)?(?:(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?\}/g
 
 const { SLACK_APP_ID, SLACK_BOT_OAUTH_TOKEN } = process.env
 
@@ -29,31 +29,71 @@ function toNumberOrUndefined(text: string | undefined) {
   return num
 }
 
-async function handleTimeMessage(
-  origMessage: { text: string; channel: string; thread_ts?: string },
-  userId: string,
-  {
-    ephemeral,
-    passive = false,
-  }: { ephemeral?: string; passive?: boolean } = {},
-) {
-  if (!TIME_REGEX.test(origMessage.text)) {
-    if (!passive) {
-      await postMessage({
-        channel: origMessage.channel,
-        markdown_text: `_timepheus sighed exasperatedly._ **WHY DID YOU PING ME???** i'm so busy and i keep getting harassed by people like you...!!`,
-        thread_ts: origMessage.thread_ts,
-      })
-    }
-    return
-  }
-  const user = await getUserInfo(userId)
-  let text = ``
+interface Message {
+  ts: string
+  text: string
+  channel: string
+  thread_ts?: string
+  // and other stuff we don't care about
+}
+
+function getMessageURL(message: Message) {
+  return `https://hackclub.slack.com/archives/${message.channel}/p${message.ts}`
+}
+
+async function checkPostedMessage(message: Message) {
+  const { text, channel, thread_ts } = message
+  if (!TIME_REGEX.test(text)) return
   TIME_REGEX.lastIndex = 0
-  const dts: [string, number, number, number][] = []
-  for (const match of origMessage.text.matchAll(TIME_REGEX)) {
-    const [segment, fmt, y, m, d, H, M, S] = match
-    console.log(y, m, d, H, M, S)
+  const data: string[] = []
+  for (const match of message.text.matchAll(TIME_REGEX)) {
+    data.push(match[0])
+  }
+  await postMessage({
+    channel,
+    blocks: [
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `<${getMessageURL(message)}|triggering msg>`,
+          },
+        ],
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: 'convert to my timezone' },
+            action_id: 'timepheus_privtime2',
+            value: JSON.stringify({
+              c: message.channel,
+              t: message.thread_ts,
+              d: data,
+            }),
+          },
+        ],
+      },
+    ],
+    thread_ts,
+  })
+}
+
+async function sendLocalMessage(value: string, userId: string) {
+  const {
+    c: channel,
+    t: thread_ts,
+    d: data,
+  } = JSON.parse(value) as { c: string; t?: string; d: string[] }
+  const user = await getUserInfo(userId)
+  let text = ''
+  for (const item of data) {
+    TIME_REGEX.lastIndex = 0
+    const arr = item.matchAll(TIME_REGEX).next().value
+    console.log(item, arr)
+    const [segment, fmt, y, m, d, H, M, S] = arr!
     const dt = DateTime.fromObject(
       {
         year: toNumberOrUndefined(y),
@@ -86,40 +126,28 @@ async function handleTimeMessage(
           timeCount
         ],
       })
-      dts.push([segment, dateCount, timeCount, dt.toMillis()])
     }
     text += `\`${segment}\`: ${segmentText}\n`
   }
   text = text.trim()
-  const blocks: unknown[] = [{ type: 'markdown', text: text }]
-  if (!ephemeral) {
-    blocks.push({
-      type: 'actions',
-      elements: [
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'convert to my timezone' },
-          action_id: 'timepheus_privtime',
-          value: JSON.stringify(dts),
-        },
-      ],
-    })
-  }
   await postMessage({
-    channel: origMessage.channel,
-    blocks,
-    thread_ts: origMessage.thread_ts,
-    ephemeral: !!ephemeral,
-    user: ephemeral,
+    channel,
+    thread_ts,
+    ephemeral: true,
+    user: userId,
+    markdown_text: text,
   })
 }
 
 async function handleEvent(event: SlackEvent): Promise<void> {
   if (event.type === 'app_mention') {
-    await handleTimeMessage(event, event.user)
+    await checkPostedMessage(event)
   } else if (event.type === 'message') {
-    if (!event.text.includes(`<@${botUserId}>`) && event.app_id !== SLACK_APP_ID) {
-      await handleTimeMessage(event, event.user, { passive: true })
+    if (
+      !event.text.includes(`<@${botUserId}>`) &&
+      event.app_id !== SLACK_APP_ID
+    ) {
+      await checkPostedMessage(event)
     }
   }
 }
@@ -127,12 +155,8 @@ async function handleEvent(event: SlackEvent): Promise<void> {
 async function handleInteractivity(interaction: SlackInteraction) {
   if (interaction.type == 'block_actions') {
     const id = interaction.actions[0]?.action_id
-    if (id === 'timepheus_privtime') {
-      await handleTimeMessage(
-        { ...interaction.message, channel: interaction.channel.id },
-        interaction.user.id,
-        { ephemeral: interaction.user.id },
-      )
+    if (id === 'timepheus_privtime2') {
+      await sendLocalMessage(interaction.actions[0]!.value, interaction.user.id)
     }
   }
 }
@@ -144,7 +168,7 @@ Bun.serve({
       if (!verified.success) return new Response(null, { status: 500 })
       const { data: jsonData } = verified
       console.log(jsonData)
-      const data = JSON.parse(jsonData)
+      const data = JSON.parse(jsonData) as SlackRequest
 
       if (data.type === 'url_verification') {
         return new Response(data.challenge)
