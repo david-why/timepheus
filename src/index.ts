@@ -5,13 +5,12 @@ import {
   getMessage,
   getUserInfo,
   postMessage,
-  removeReaction,
-  SlackError,
 } from './slack'
 import * as chrono from 'chrono-node'
 
-const PORT = Number(process.env.PORT || 3000)
+const REACTION_EMOJI = 'timepheus_clk'
 
+const PORT = Number(process.env.PORT || 3000)
 const { SLACK_APP_ID, SLACK_BOT_OAUTH_TOKEN } = process.env
 
 if (!SLACK_APP_ID) {
@@ -58,7 +57,6 @@ function parseMessageData({
       !result.start.isCertain('second')
     )
       continue
-    console.log(result.start.date(), result.end?.date())
     data.push([
       result.text,
       Math.floor(result.start.date().getTime() / 1000),
@@ -75,7 +73,7 @@ async function checkPostedMessage(message: Message) {
   if (!data.length) return
   await addReaction({
     channel,
-    name: 'tw_alarm_clock',
+    name: REACTION_EMOJI,
     timestamp: message.ts,
   })
 }
@@ -92,6 +90,7 @@ async function sendLocalMessage(
   },
   userId: string,
 ) {
+  if (!data) return
   const block: SlackRichTextBlock = { type: 'rich_text', elements: [] }
   for (const [segment, tsStart, tsEnd] of data) {
     const elements: SlackRichTextElement[] = [
@@ -124,7 +123,6 @@ async function sendLocalMessage(
     }
     block.elements.push({ type: 'rich_text_section', elements })
   }
-  console.log(block.elements[0]?.elements)
   await postMessage({
     channel,
     thread_ts,
@@ -135,21 +133,8 @@ async function sendLocalMessage(
 }
 
 async function checkMessageReaction(event: SlackReactionAddedEvent) {
-  if (event.reaction !== 'tw_alarm_clock') return
+  if (event.reaction !== REACTION_EMOJI) return
   if (event.item.type !== 'message') return
-  try {
-    await removeReaction({
-      name: 'tw_alarm_clock',
-      channel: event.item.channel,
-      timestamp: event.item.ts,
-    })
-  } catch (e) {
-    if (e instanceof SlackError && e.error === 'no_reaction') {
-      console.log('already removed')
-      return
-    }
-    throw e
-  }
   const message = await getMessage({
     channel: event.item.channel,
     ts: event.item.ts,
@@ -209,7 +194,6 @@ Bun.serve({
       const verified = await getVerifiedData(req)
       if (!verified.success) return new Response(null, { status: 500 })
       const { data: jsonData } = verified
-      console.log(jsonData)
       const data = JSON.parse(jsonData) as SlackRequest
 
       if (data.type === 'url_verification') {
@@ -228,7 +212,6 @@ Bun.serve({
       const params = new URLSearchParams(encodedData)
       const payload = params.get('payload')!
       const data = JSON.parse(payload) as SlackInteraction
-      console.log(data)
 
       handleInteractivity(data)
       return new Response()
