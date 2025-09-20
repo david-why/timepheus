@@ -1,5 +1,18 @@
 const { SLACK_BOT_OAUTH_TOKEN } = process.env
 
+export class SlackError extends Error {
+  constructor(
+    public endpoint: string,
+    public response: ErrorResponse,
+  ) {
+    super(`Slack ${endpoint} API returned error: ${response.error}`)
+  }
+
+  get error() {
+    return this.response.error
+  }
+}
+
 interface ErrorResponse {
   ok: false
   error: string
@@ -41,7 +54,7 @@ export async function getUserInfo(userId: string) {
   )
   const data = (await res.json()) as GetUserInfoResponse | ErrorResponse
   if (!data.ok) {
-    throw new Error(`Slack API returned error: ${data.error}`)
+    throw new SlackError('users.info', data)
   }
   return data.user
 }
@@ -91,7 +104,7 @@ export async function postMessage(parameters: PostMessageParams) {
   const data = (await res.json()) as PostMessageResponse | ErrorResponse
   if (!data.ok) {
     console.error(data)
-    throw new Error(`Slack chat.postMessage API returned error: ${data.error}`)
+    throw new SlackError('chat.postMessage', data)
   }
 }
 
@@ -114,7 +127,7 @@ export async function authTest() {
   const data = (await res.json()) as AuthTestResponse | ErrorResponse
   if (!data.ok) {
     console.error(data)
-    throw new Error(`Slack auth.test API returned error: ${data.error}`)
+    throw new SlackError('auth.test', data)
   }
   return data
 }
@@ -145,6 +158,80 @@ export async function addReaction(params: AddReactionParams) {
   const data = (await res.json()) as AddReactionResponse | ErrorResponse
   if (!data.ok) {
     console.error(data)
-    throw new Error(`Slack auth.test API returned error: ${data.error}`)
+    throw new SlackError('reactions.add', data)
   }
+}
+
+type RemoveReactionParams = {
+  name: string
+} & (
+  | { channel: string; timestamp: string }
+  | { file: string }
+  | { file_comment: string }
+)
+
+interface RemoveReactionResponse {
+  ok: true
+}
+
+export async function removeReaction(params: RemoveReactionParams) {
+  const bodyBuilder = new URLSearchParams()
+  bodyBuilder.set('name', params.name)
+  if ('channel' in params && params.timestamp) {
+    bodyBuilder.set('channel', params.channel)
+    bodyBuilder.set('timestamp', params.timestamp)
+  } else if ('file' in params) {
+    bodyBuilder.set('file', params.file)
+  } else if ('file_comment' in params) {
+    bodyBuilder.set('file_comment', params.file_comment)
+  } else {
+    throw new Error('Params to removeReaction are invalid')
+  }
+  const res = await fetch(`https://slack.com/api/reactions.remove`, {
+    method: 'POST',
+    body: bodyBuilder.toString(),
+    headers: {
+      Authorization: `Bearer ${SLACK_BOT_OAUTH_TOKEN}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+  })
+  const data = (await res.json()) as RemoveReactionResponse | ErrorResponse
+  if (!data.ok) {
+    console.error(data)
+    throw new SlackError('reactions.remove', data)
+  }
+}
+
+interface GetMessageParams {
+  channel: string
+  ts: string
+}
+
+interface GetMessageResponse {
+  type: string
+  user: string
+  text: string
+  ts: string
+}
+
+export async function getMessage(params: GetMessageParams) {
+  const bodyBuilder = new URLSearchParams()
+  bodyBuilder.set('channel', params.channel)
+  bodyBuilder.set('inclusive', 'true')
+  bodyBuilder.set('limit', '1')
+  bodyBuilder.set('oldest', params.ts)
+  const res = await fetch(
+    `https://slack.com/api/conversations.history?${bodyBuilder.toString()}`,
+    {
+      headers: {
+        Authorization: `Bearer ${SLACK_BOT_OAUTH_TOKEN}`,
+      },
+    },
+  )
+  const data = (await res.json()) as any
+  if (!data.ok) {
+    console.error(data)
+    throw new SlackError('conversations.history', data)
+  }
+  return data.messages[0] as GetMessageResponse | undefined
 }

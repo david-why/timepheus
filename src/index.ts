@@ -1,5 +1,13 @@
 import { getVerifiedData } from './signature'
-import { addReaction, authTest, getUserInfo, postMessage } from './slack'
+import {
+  addReaction,
+  authTest,
+  getMessage,
+  getUserInfo,
+  postMessage,
+  removeReaction,
+  SlackError,
+} from './slack'
 import * as chrono from 'chrono-node'
 
 const PORT = Number(process.env.PORT || 3000)
@@ -34,11 +42,14 @@ interface PrivTimeValue {
   d: [string, number, number | null][]
 }
 
-async function checkPostedMessage(message: Message) {
-  const { text, channel, thread_ts, user: userId } = message
-  const user = await getUserInfo(userId)
-  const results = chrono.parse(text, { timezone: user.tz })
-  if (!results.length) return
+function parseMessageData({
+  text,
+  tz,
+}: {
+  text: string
+  tz: string
+}): PrivTimeValue['d'] {
+  const results = chrono.parse(text, { timezone: tz })
   const data: PrivTimeValue['d'] = []
   for (const result of results) {
     if (
@@ -46,7 +57,7 @@ async function checkPostedMessage(message: Message) {
       !result.start.isCertain('minute') &&
       !result.start.isCertain('second')
     )
-      return
+      continue
     console.log(result.start.date(), result.end?.date())
     data.push([
       result.text,
@@ -54,42 +65,33 @@ async function checkPostedMessage(message: Message) {
       result.end ? Math.floor(result.end.date().getTime() / 1000) : null,
     ])
   }
-  await Promise.all([
-    addReaction({
-      channel,
-      name: 'tw_alarm_clock',
-      timestamp: message.ts,
-    }),
-    postMessage({
-      channel,
-      blocks: [
-        {
-          type: 'actions',
-          elements: [
-            {
-              type: 'button',
-              text: { type: 'plain_text', text: 'convert to my timezone' },
-              action_id: 'timepheus_privtime3',
-              value: JSON.stringify({
-                c: channel,
-                t: thread_ts,
-                d: data,
-              } satisfies PrivTimeValue),
-            },
-          ],
-        },
-      ],
-      thread_ts,
-    }),
-  ])
+  return data
 }
 
-async function sendLocalMessage(value: string, userId: string) {
-  const {
-    c: channel,
-    t: thread_ts,
-    d: data,
-  } = JSON.parse(value) as PrivTimeValue
+async function checkPostedMessage(message: Message) {
+  const { text, channel, user: userId } = message
+  const user = await getUserInfo(userId)
+  const data = parseMessageData({ text, tz: user.tz })
+  if (!data.length) return
+  await addReaction({
+    channel,
+    name: 'tw_alarm_clock',
+    timestamp: message.ts,
+  })
+}
+
+async function sendLocalMessage(
+  {
+    channel,
+    thread_ts,
+    data,
+  }: {
+    channel: string
+    thread_ts?: string
+    data: [string, number, number | null][]
+  },
+  userId: string,
+) {
   const block: SlackRichTextBlock = { type: 'rich_text', elements: [] }
   for (const [segment, tsStart, tsEnd] of data) {
     const elements: SlackRichTextElement[] = [
@@ -132,6 +134,41 @@ async function sendLocalMessage(value: string, userId: string) {
   })
 }
 
+async function checkMessageReaction(event: SlackReactionAddedEvent) {
+  if (event.reaction !== 'tw_alarm_clock') return
+  if (event.item.type !== 'message') return
+  try {
+    await removeReaction({
+      name: 'tw_alarm_clock',
+      channel: event.item.channel,
+      timestamp: event.item.ts,
+    })
+  } catch (e) {
+    if (e instanceof SlackError && e.error === 'no_reaction') {
+      console.log('already removed')
+      return
+    }
+    throw e
+  }
+  const message = await getMessage({
+    channel: event.item.channel,
+    ts: event.item.ts,
+  })
+  if (!message) return
+  const user = await getUserInfo(event.user)
+  await sendLocalMessage(
+    {
+      channel: event.item.channel,
+      thread_ts: event.item.thread_ts,
+      data: parseMessageData({
+        text: message.text,
+        tz: user.tz,
+      }),
+    },
+    event.user,
+  )
+}
+
 async function handleEvent(event: SlackEvent): Promise<void> {
   if (event.type === 'app_mention') {
     await checkPostedMessage(event)
@@ -139,6 +176,8 @@ async function handleEvent(event: SlackEvent): Promise<void> {
     if (!event.app_id && !event.text.includes(`<@${botUserId}>`)) {
       await checkPostedMessage(event)
     }
+  } else if (event.type === 'reaction_added') {
+    await checkMessageReaction(event)
   }
 }
 
@@ -146,7 +185,20 @@ async function handleInteractivity(interaction: SlackInteraction) {
   if (interaction.type == 'block_actions') {
     const id = interaction.actions[0]?.action_id
     if (id === 'timepheus_privtime3') {
-      await sendLocalMessage(interaction.actions[0]!.value, interaction.user.id)
+      const {
+        c: channel,
+        t: thread_ts,
+        d: data,
+      } = JSON.parse(interaction.actions[0]!.value) as PrivTimeValue
+      await sendLocalMessage({ channel, thread_ts, data }, interaction.user.id)
+    } else {
+      await postMessage({
+        channel: interaction.channel.id,
+        thread_ts: interaction.message.thread_ts,
+        ephemeral: true,
+        user: interaction.user.id,
+        markdown_text: `_timepheus looks at you with a pleading face._ i don't understand that, sowwy :pleading_face:`,
+      })
     }
   }
 }

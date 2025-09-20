@@ -81,7 +81,27 @@ interface SlackMessageEvent {
   // ...
 }
 
-type SlackEvent = SlackAppMentionEvent | SlackMessageEvent
+interface SlackReactionAddedEvent {
+  type: 'reaction_added'
+  user: string
+  reaction: string
+  item:
+    | {
+        type: 'message'
+        channel: string
+        ts: string
+        thread_ts?: string
+      }
+    | { type: 'file' }
+    | { type: 'file_comment' }
+  item_user: string
+  event_ts: string
+}
+
+type SlackEvent =
+  | SlackAppMentionEvent
+  | SlackMessageEvent
+  | SlackReactionAddedEvent
 
 // request bodies sent by slack to our endpoint
 
