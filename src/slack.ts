@@ -50,7 +50,7 @@ interface PostMessageParams {
   channel: string
   markdown_text?: string
   thread_ts?: string
-  blocks?: unknown[]
+  blocks?: SlackBlock[]
   ephemeral?: boolean
   user?: string
 }

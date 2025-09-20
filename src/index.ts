@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon'
 import { getVerifiedData } from './signature'
 import { authTest, getUserInfo, postMessage } from './slack'
+import * as chrono from 'chrono-node'
 
 const PORT = Number(process.env.PORT || 3000)
 
@@ -33,6 +34,7 @@ interface Message {
   ts: string
   text: string
   channel: string
+  user: string
   thread_ts?: string
   // and other stuff we don't care about
 }
@@ -41,38 +43,36 @@ function getMessageURL(message: Message) {
   return `https://hackclub.slack.com/archives/${message.channel}/p${message.ts}`
 }
 
+interface PrivTimeValue {
+  c: string
+  t?: string
+  d: [string, number][]
+}
+
 async function checkPostedMessage(message: Message) {
-  const { text, channel, thread_ts } = message
-  if (!TIME_REGEX.test(text)) return
-  TIME_REGEX.lastIndex = 0
-  const data: string[] = []
-  for (const match of message.text.matchAll(TIME_REGEX)) {
-    data.push(match[0])
+  const { text, channel, thread_ts, user: userId } = message
+  const user = await getUserInfo(userId)
+  const results = chrono.parse(text, { timezone: user.tz })
+  if (!results.length) return
+  const data: [string, number][] = []
+  for (const result of results) {
+    data.push([result.text, Math.floor(result.date().getTime() / 1000)])
   }
   await postMessage({
     channel,
     blocks: [
-      {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: `<${getMessageURL(message)}|triggering msg>`,
-          },
-        ],
-      },
       {
         type: 'actions',
         elements: [
           {
             type: 'button',
             text: { type: 'plain_text', text: 'convert to my timezone' },
-            action_id: 'timepheus_privtime2',
+            action_id: 'timepheus_privtime3',
             value: JSON.stringify({
-              c: message.channel,
-              t: message.thread_ts,
+              c: channel,
+              t: thread_ts,
               d: data,
-            }),
+            } satisfies PrivTimeValue),
           },
         ],
       },
@@ -86,56 +86,32 @@ async function sendLocalMessage(value: string, userId: string) {
     c: channel,
     t: thread_ts,
     d: data,
-  } = JSON.parse(value) as { c: string; t?: string; d: string[] }
-  const user = await getUserInfo(userId)
-  let text = ''
-  for (const item of data) {
-    TIME_REGEX.lastIndex = 0
-    const arr = item.matchAll(TIME_REGEX).next().value
-    console.log(item, arr)
-    const [segment, fmt, y, m, d, H, M, S] = arr!
-    const dt = DateTime.fromObject(
-      {
-        year: toNumberOrUndefined(y),
-        month: toNumberOrUndefined(m),
-        day: toNumberOrUndefined(d),
-        hour: toNumberOrUndefined(H),
-        minute: toNumberOrUndefined(M),
-        second: toNumberOrUndefined(S),
-      },
-      { zone: user.tz },
-    )
-    const dateCount = (fmt || 'dd').split('d').length - 1
-    const timeCount = (fmt || 'tt').split('t').length - 1
-    let segmentText = ''
-    if (dateCount > 4 && timeCount > 4) {
-      segmentText =
-        '_timepheus sighed._ "so many `d` and `t` specified! do you actually want me dead???"'
-    } else if (dateCount > 4) {
-      segmentText =
-        '_timepheus sighed._ "so many `d` specified! you really love the date don\'t you???"'
-    } else if (timeCount > 4) {
-      segmentText =
-        '_timepheus sighed._ "so many `t` specified! what do you want from me???"'
-    } else {
-      segmentText = dt.toLocaleString({
-        dateStyle: ([undefined, 'short', 'medium', 'long', 'full'] as const)[
-          dateCount
-        ],
-        timeStyle: ([undefined, 'short', 'medium', 'long', 'full'] as const)[
-          timeCount
-        ],
-      })
-    }
-    text += `\`${segment}\`: ${segmentText}\n`
+  } = JSON.parse(value) as PrivTimeValue
+  const block: SlackRichTextBlock = { type: 'rich_text', elements: [] }
+  for (const [segment, timestamp] of data) {
+    block.elements.push({
+      type: 'rich_text_section',
+      elements: [
+        {
+          type: 'text',
+          text: `\`${segment}\`: `,
+        },
+        {
+          type: 'date',
+          timestamp,
+          format: '{date_slash} at {time} ({ago})',
+          fallback: '<Failed to display time>',
+        },
+      ],
+    })
   }
-  text = text.trim()
+  console.log(block.elements[0]?.elements)
   await postMessage({
     channel,
     thread_ts,
     ephemeral: true,
     user: userId,
-    markdown_text: text,
+    blocks: [block],
   })
 }
 
@@ -155,7 +131,7 @@ async function handleEvent(event: SlackEvent): Promise<void> {
 async function handleInteractivity(interaction: SlackInteraction) {
   if (interaction.type == 'block_actions') {
     const id = interaction.actions[0]?.action_id
-    if (id === 'timepheus_privtime2') {
+    if (id === 'timepheus_privtime3') {
       await sendLocalMessage(interaction.actions[0]!.value, interaction.user.id)
     }
   }

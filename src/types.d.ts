@@ -1,3 +1,60 @@
+// slack block kit types (partial ofc)
+
+interface SlackRichTextBlock {
+  type: 'rich_text'
+  elements: SlackRichTextObject[]
+  block_id?: string
+}
+
+interface SlackRichTextSection {
+  type: 'rich_text_section'
+  elements: SlackRichTextElement[]
+}
+
+type SlackRichTextObject = SlackRichTextSection
+
+interface SlackRichTextTextElement {
+  type: 'text'
+  text: string
+  style?: { bold?: boolean; italic?: boolean; strike?: boolean; code?: boolean }
+}
+
+interface SlackRichTextDateElement {
+  type: 'date'
+  timestamp: number
+  format: string
+  url?: string
+  fallback?: string
+}
+
+type SlackRichTextElement = SlackRichTextTextElement | SlackRichTextDateElement
+
+interface SlackActionsBlock {
+  type: 'actions'
+  elements: SlackBlockElement[]
+}
+
+interface SlackButtonElement {
+  type: 'button'
+  text: SlackTextObject & { type: 'plain_text' }
+  action_id?: string
+  url?: string
+  value?: string
+  style?: 'primary' | 'danger'
+  confirm?: unknown
+  accessibility_label?: string
+}
+
+type SlackBlockElement = SlackButtonElement
+
+interface SlackMarkdownBlock {
+  type: 'markdown'
+  text: string
+  block_id?: string
+}
+
+type SlackBlock = SlackRichTextBlock | SlackActionsBlock | SlackMarkdownBlock
+
 // slack events api events
 
 interface SlackAppMentionEvent {
@@ -59,7 +116,7 @@ interface SlackBlockActionsInteraction {
   channel: {
     id: string
     // ...
-  },
+  }
   message: {
     user: string
     ts: string
