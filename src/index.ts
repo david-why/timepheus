@@ -41,6 +41,22 @@ interface PrivTimeValue {
   d: [string, number, number | null][]
 }
 
+function getTzOffset(zone: string, refDate: Date = new Date()) {
+  const ref = new Date(refDate)
+  ref.setMilliseconds(0)
+  const zonedNow = new Date(
+    ref.toLocaleString('en-US', {
+      timeZone: zone,
+    }),
+  )
+  const utcNow = new Date(
+    ref.toLocaleString('en-US', {
+      timeZone: 'UTC',
+    }),
+  )
+  return (zonedNow.getTime() - utcNow.getTime()) / 1000 / 60
+}
+
 function parseMessageData({
   text,
   tz,
@@ -48,7 +64,7 @@ function parseMessageData({
   text: string
   tz: string
 }): PrivTimeValue['d'] {
-  const results = chrono.parse(text, { timezone: tz })
+  const results = chrono.parse(text, { timezone: getTzOffset(tz) })
   const data: PrivTimeValue['d'] = []
   for (const result of results) {
     if (
@@ -57,10 +73,14 @@ function parseMessageData({
       !result.start.isCertain('second')
     )
       continue
+    const result2 =
+      chrono.parse(result.text, {
+        timezone: getTzOffset(tz, result.start.date()),
+      })[0] ?? result
     data.push([
-      result.text,
-      Math.floor(result.start.date().getTime() / 1000),
-      result.end ? Math.floor(result.end.date().getTime() / 1000) : null,
+      result2.text,
+      Math.floor(result2.start.date().getTime() / 1000),
+      result2.end ? Math.floor(result2.end.date().getTime() / 1000) : null,
     ])
   }
   return data
@@ -140,7 +160,7 @@ async function checkMessageReaction(event: SlackReactionAddedEvent) {
     ts: event.item.ts,
   })
   if (!message) return
-  const user = await getUserInfo(event.user)
+  const user = await getUserInfo(event.item_user)
   await sendLocalMessage(
     {
       channel: event.item.channel,
@@ -162,7 +182,9 @@ async function handleEvent(event: SlackEvent): Promise<void> {
       await checkPostedMessage(event)
     }
   } else if (event.type === 'reaction_added') {
-    await checkMessageReaction(event)
+    if (event.user !== botUserId) {
+      await checkMessageReaction(event)
+    }
   }
 }
 
