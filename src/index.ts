@@ -1,3 +1,10 @@
+import {
+  getUserHint,
+  getUserOptout,
+  optinUser,
+  optoutUser,
+  setUserHint,
+} from './database'
 import { getVerifiedData } from './signature'
 import {
   addReaction,
@@ -91,6 +98,7 @@ async function checkPostedMessage(message: Message) {
   const user = await getUserInfo(userId)
   const data = parseMessageData({ text, tz: user.tz })
   if (!data.length) return
+  if (await getUserOptout(userId)) return
   await Promise.all([
     addReaction({
       channel,
@@ -98,7 +106,25 @@ async function checkPostedMessage(message: Message) {
       timestamp: message.ts,
     }),
     sendLocalMessage({ user: userId, ts, channel, thread_ts, data }),
+    checkUserHint(message),
   ])
+}
+
+async function checkUserHint(message: Message) {
+  const hasHinted = await getUserHint(message.user)
+  if (!hasHinted) {
+    await Promise.all([setUserHint(message.user), sendUserHint(message)])
+  }
+}
+
+async function sendUserHint(message: Message) {
+  await postMessage({
+    channel: message.channel,
+    thread_ts: message.thread_ts,
+    ephemeral: true,
+    user: message.user,
+    markdown_text: `:timepheus_clock: hi there, i'm timepheus! i help you keep track of date & times in your messages. if you don't like me _sob sob_ you can turn me off :pleading_face: by using the "/timepheus-optout" command _(you will only see this message once)_`,
+  })
 }
 
 async function sendLocalMessage(
@@ -196,6 +222,20 @@ async function handleEvent(event: SlackEvent): Promise<void> {
   }
 }
 
+async function handleOptoutCommand(data: SlackSlashCommandRequest) {
+  optoutUser(data.user_id)
+  return new Response(
+    'you have opted out from my help :( to opt in again, use "/timepheus-optin". hope to see you again soon!',
+  )
+}
+
+async function handleOptinCommand(data: SlackSlashCommandRequest) {
+  optinUser(data.user_id)
+  return new Response(
+    'hey there! nice to see you again!! _(you have opted back in to timepheus messages)_',
+  )
+}
+
 Bun.serve({
   routes: {
     '/slack/events-endpoint': async (req) => {
@@ -211,6 +251,26 @@ Bun.serve({
         return new Response()
       }
       return new Response()
+    },
+    '/slack/command/optout': async (req) => {
+      const verified = await getVerifiedData(req)
+      if (!verified.success) return new Response(null, { status: 500 })
+      const { data: encodedData } = verified
+      const data = new URLSearchParams(
+        encodedData,
+      ).toJSON() as unknown as SlackSlashCommandRequest
+
+      return await handleOptoutCommand(data)
+    },
+    '/slack/command/optin': async (req) => {
+      const verified = await getVerifiedData(req)
+      if (!verified.success) return new Response(null, { status: 500 })
+      const { data: encodedData } = verified
+      const data = new URLSearchParams(
+        encodedData,
+      ).toJSON() as unknown as SlackSlashCommandRequest
+
+      return await handleOptinCommand(data)
     },
   },
   port: PORT,
