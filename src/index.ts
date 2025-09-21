@@ -14,6 +14,7 @@ import {
   postMessage,
 } from './slack'
 import * as chrono from 'chrono-node'
+import indexHtml from './index.html'
 
 const REACTION_EMOJI = 'timepheus_clk'
 
@@ -280,6 +281,7 @@ Bun.serve({
 
       return await handleOptinCommand(data)
     },
+    '/': indexHtml,
   },
   port: PORT,
 })

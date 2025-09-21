@@ -15,6 +15,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "bootstrap": "^5.3.8",
     "chrono-node": "^2.8.4"
   }
 }
