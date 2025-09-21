@@ -94,20 +94,10 @@ function parseMessageData({
 }
 
 async function checkPostedMessage(message: Message) {
-  const { text, channel, ts, thread_ts, user: userId } = message
-  const user = await getUserInfo(userId)
-  const data = parseMessageData({ text, tz: user.tz })
+  const user = await getUserInfo(message.user)
+  const data = parseMessageData({ text: message.text, tz: user.tz })
   if (!data.length) return
-  if (await getUserOptout(userId)) return
-  await Promise.all([
-    addReaction({
-      channel,
-      name: REACTION_EMOJI,
-      timestamp: message.ts,
-    }),
-    sendLocalMessage({ user: userId, ts, channel, thread_ts, data }),
-    checkUserHint(message),
-  ])
+  await Promise.all([sendMessageOrReact(message, data), checkUserHint(message)])
 }
 
 async function checkUserHint(message: Message) {
@@ -123,8 +113,23 @@ async function sendUserHint(message: Message) {
     thread_ts: message.thread_ts,
     ephemeral: true,
     user: message.user,
-    markdown_text: `:timepheus_clock: hi there, i'm timepheus! i help you keep track of date & times in your messages. if you don't like me _sob sob_ you can turn me off :pleading_face: by using the "/timepheus-optout" command _(you will only see this message once)_`,
+    markdown_text: `:timepheus_clock: hi there, i'm timepheus! i help you convert dates & times in your messages to everyone's local time. if you don't like me _sob sob_ you can turn me off :pleading_face: by using the "/timepheus-optout" command, and i'll react instead of reply _(you will only see this message once)_`,
   })
+}
+
+async function sendMessageOrReact(
+  message: Message,
+  data: [string, number, number | null][],
+) {
+  if (await getUserOptout(message.user)) {
+    return await addReaction({
+      channel: message.channel,
+      name: REACTION_EMOJI,
+      timestamp: message.ts,
+    })
+  } else {
+    return await sendLocalMessage({ ...message, data })
+  }
 }
 
 async function sendLocalMessage(
@@ -175,9 +180,10 @@ async function sendLocalMessage(
     }
     block.elements.push({ type: 'rich_text_section', elements })
   }
+  const postThread = ephemeral ? thread_ts : (thread_ts ?? ts)
   await postMessage({
     channel,
-    thread_ts: thread_ts ?? ts,
+    thread_ts: postThread,
     ephemeral,
     user: userId,
     blocks: [block],
@@ -193,16 +199,17 @@ async function checkMessageReaction(event: SlackReactionAddedEvent) {
   })
   if (!message) return
   const user = await getUserInfo(event.item_user)
+  const data = parseMessageData({
+    text: message.text,
+    tz: user.tz,
+  })
   await sendLocalMessage(
     {
       user: event.item_user,
       channel: event.item.channel,
       ts: event.item.ts,
       thread_ts: event.item.thread_ts,
-      data: parseMessageData({
-        text: message.text,
-        tz: user.tz,
-      }),
+      data,
     },
     { userId: event.user, ephemeral: true },
   )
@@ -225,7 +232,7 @@ async function handleEvent(event: SlackEvent): Promise<void> {
 async function handleOptoutCommand(data: SlackSlashCommandRequest) {
   optoutUser(data.user_id)
   return new Response(
-    'you have opted out from my help :( to opt in again, use "/timepheus-optin". hope to see you again soon!',
+    `you have opted out from my help :( now, i will only add the :${REACTION_EMOJI}: reaction and will not reply publicly. to opt in again, use "/timepheus-optin". hope to see you again soon!`,
   )
 }
 

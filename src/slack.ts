@@ -106,6 +106,7 @@ export async function postMessage(parameters: PostMessageParams) {
     console.error(data)
     throw new SlackError('chat.postMessage', data)
   }
+  console.log(data)
 }
 
 interface AuthTestResponse {

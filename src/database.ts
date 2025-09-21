@@ -1,7 +1,5 @@
 import { sql } from 'bun'
 
-export const INIT_DATABASE = sql.file('sql/init.sql')
-
 export async function getValue(key: string): Promise<string | null> {
   const result = await sql<
     { value: string }[]

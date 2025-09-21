@@ -1,8 +1,8 @@
-import { INIT_DATABASE } from './src/database'
+import { sql } from "bun"
 
 async function initDatabase() {
   console.log('Initializing database...')
-  await INIT_DATABASE
+  await sql.file('sql/init.sql')
   console.log('Database cleared and initialized!')
 }
 
