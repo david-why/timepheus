@@ -21,7 +21,7 @@ The first is the detection of natural language datetimes. I used the incredible 
 
 But I think I got it to detect all dates, including DST, correctly! If you find any error, please let me know.
 
-The second magic is sending a single message that all users see in their local time. I used a Slack API for that: in the Blocks Kit, there is [a date Rich Text Element](https://docs.slack.dev/reference/block-kit/blocks/rich-text-block/#date-element-type), which supports showing a Unix timestamp in a formatted string to the user. (I initially tried having each user click a button or add a reaction for the bot to send them an ephemeral message, but I decided the UX is bad.)
+The second magic is sending a single message that all users see in their local time. I used a Slack API for that: in the Blocks Kit, there is [a date Rich Text Element](https://docs.slack.dev/reference/block-kit/blocks/rich-text-block/#date-element-type), which supports showing a Unix timestamp in a formatted string to the user. (I initially tried having each user click a button or add a reaction for the bot to send them an ephemeral message, but I decided the UX is bad.) Sadly, this API **does not work** on mobile, although it is clearly documented - there's unfortunately nothing I can do :sob:
 
 Regarding other technical details: the project is written in [Bun](https://bun.com), the fast all-in-one TS/JS runtime and package manager where (you heard it) TS and JSX files are first-class citizens just like JS! I will advertise Bun on every project until I convert more people so USE BUN :))))))
 

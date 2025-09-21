@@ -115,7 +115,7 @@ async function sendUserHint(message: Message) {
     thread_ts: message.thread_ts,
     ephemeral: true,
     user: message.user,
-    markdown_text: `:timepheus_clock: hi there, i'm timepheus! i help you convert dates & times in your messages to everyone's local time. if you don't like me _sob sob_ you can turn me off :pleading_face: by using the "/timepheus-optout" command, and i'll react instead of reply _(you will only see this message once)_`,
+    markdown_text: `:timepheus_clock: hi there, i'm timepheus! i help you convert dates & times in your messages to everyone's local time.\n\nif you don't like me _sob sob_ you can turn me off :pleading_face: by using the "/timepheus-optout" command, and i'll react instead of reply!\n\n**IMPORTANT: this bot doesn't work on mobile because of bad slack support for their own documented API, nothing i can do :(**\n\n_(you will only see this message once)_`,
   })
 }
 
