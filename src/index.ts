@@ -80,6 +80,7 @@ function parseMessageData({
       !result.start.isCertain('second')
     )
       continue
+    if (['now'].includes(result.text.toLowerCase())) continue
     const result2 =
       chrono.parse(result.text, {
         timezone: getTzOffset(tz, result.start.date()),
@@ -232,7 +233,7 @@ async function handleEvent(event: SlackEvent): Promise<void> {
 async function handleOptoutCommand(data: SlackSlashCommandRequest) {
   optoutUser(data.user_id)
   return new Response(
-    `you have opted out from my help :( now, i will only add the :${REACTION_EMOJI}: reaction and will not reply publicly. to opt in again, use "/timepheus-optin". hope to see you again soon!`,
+    `you have opted out from my help :( now, i will only add the :${REACTION_EMOJI}: reaction and will not reply publicly. anyone clicking on it will receive an ephemeral message to them privately with the dates/times. to opt in again, use "/timepheus-optin". hope to see you again soon!`,
   )
 }
 
