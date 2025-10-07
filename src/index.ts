@@ -115,7 +115,7 @@ async function sendUserHint(message: Message) {
     thread_ts: message.thread_ts,
     ephemeral: true,
     user: message.user,
-    markdown_text: `:timepheus_clock: hi there, i'm timepheus! i help you convert dates & times in your messages to everyone's local time.\n\nif you don't like me _sob sob_ you can turn me off :pleading_face: by using the "/timepheus-optout" command, and i'll only reply when you @ me!\n\n**IMPORTANT: this bot doesn't work on mobile because of bad slack support for their own documented API, nothing i can do :(**\n\n_(you will only see this message once)_`,
+    markdown_text: `:timepheus_clock: hi there, i'm timepheus! i help you convert dates & times in your messages to everyone's local time.\n\nif you want me to reply publicly with times you send (like i did before), either @ me, or use "/timepheus-optin" to opt in!\n\n**IMPORTANT: this bot doesn't work on mobile because of bad slack support for their own documented API, nothing i can do :(**\n\n_(you will only see this message once)_`,
   })
 }
 
@@ -244,7 +244,7 @@ async function handleOptoutCommand(data: SlackSlashCommandRequest) {
 async function handleOptinCommand(data: SlackSlashCommandRequest) {
   optinUser(data.user_id)
   return new Response(
-    'hey there! nice to see you again!! _(you have opted back in to timepheus messages)_',
+    'hey there! nice to see you again!! _(you have opted back in to public timepheus messages)_',
   )
 }
 
