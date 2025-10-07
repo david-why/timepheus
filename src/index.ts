@@ -115,7 +115,7 @@ async function sendUserHint(message: Message) {
     thread_ts: message.thread_ts,
     ephemeral: true,
     user: message.user,
-    markdown_text: `:timepheus_clock: hi there, i'm timepheus! i help you convert dates & times in your messages to everyone's local time.\n\nif you don't like me _sob sob_ you can turn me off :pleading_face: by using the "/timepheus-optout" command, and i'll react instead of reply!\n\n**IMPORTANT: this bot doesn't work on mobile because of bad slack support for their own documented API, nothing i can do :(**\n\n_(you will only see this message once)_`,
+    markdown_text: `:timepheus_clock: hi there, i'm timepheus! i help you convert dates & times in your messages to everyone's local time.\n\nif you don't like me _sob sob_ you can turn me off :pleading_face: by using the "/timepheus-optout" command, and i'll only reply when you @ me!\n\n**IMPORTANT: this bot doesn't work on mobile because of bad slack support for their own documented API, nothing i can do :(**\n\n_(you will only see this message once)_`,
   })
 }
 
@@ -123,7 +123,10 @@ async function sendMessageOrReact(
   message: Message,
   data: [string, number, number | null][],
 ) {
-  if (await getUserOptout(message.user)) {
+  const shouldMessage =
+    !(await getUserOptout(message.user)) ||
+    message.text.includes(`<@${botUserId}>`)
+  if (!shouldMessage) {
     return await addReaction({
       channel: message.channel,
       name: REACTION_EMOJI,
@@ -234,7 +237,7 @@ async function handleEvent(event: SlackEvent): Promise<void> {
 async function handleOptoutCommand(data: SlackSlashCommandRequest) {
   optoutUser(data.user_id)
   return new Response(
-    `you have opted out from my help :( now, i will only add the :${REACTION_EMOJI}: reaction and will not reply publicly. anyone clicking on it will receive an ephemeral message to them privately with the dates/times. to opt in again, use "/timepheus-optin". hope to see you again soon!`,
+    `you have opted out from my help :( now, i will only add the :${REACTION_EMOJI}: reaction and will not reply publicly (unless you @ me). anyone clicking on it will receive an ephemeral message to them privately with the dates/times. to opt in again, use "/timepheus-optin". hope to see you again soon!`,
   )
 }
 
