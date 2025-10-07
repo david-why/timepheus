@@ -224,7 +224,7 @@ async function handleEvent(event: SlackEvent): Promise<void> {
   if (event.type === 'app_mention') {
     await checkPostedMessage(event)
   } else if (event.type === 'message') {
-    if (!event.app_id && !event.text.includes(`<@${botUserId}>`)) {
+    if (!event.app_id && event.text && !event.text.includes(`<@${botUserId}>`)) {
       await checkPostedMessage(event)
     }
   } else if (event.type === 'reaction_added') {
