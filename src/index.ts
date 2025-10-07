@@ -144,7 +144,6 @@ async function sendLocalMessage(
     ts,
     data,
   }: {
-    user: string
     channel: string
     thread_ts?: string
     ts: string
@@ -186,12 +185,29 @@ async function sendLocalMessage(
     block.elements.push({ type: 'rich_text_section', elements })
   }
   const postThread = ephemeral ? thread_ts : (thread_ts ?? ts)
+  const blocks: SlackBlock[] = [block]
+  if (ephemeral) {
+    blocks.splice(0, 0, {
+      type: 'rich_text',
+      elements: [
+        {
+          type: 'rich_text_section',
+          elements: [
+            {
+              type: 'user',
+              user_id: userId!,
+            },
+          ],
+        },
+      ],
+    })
+  }
   await postMessage({
     channel,
     thread_ts: postThread,
     ephemeral,
     user: userId,
-    blocks: [block],
+    blocks,
   })
 }
 
@@ -210,7 +226,6 @@ async function checkMessageReaction(event: SlackReactionAddedEvent) {
   })
   await sendLocalMessage(
     {
-      user: event.item_user,
       channel: event.item.channel,
       ts: event.item.ts,
       thread_ts: event.item.thread_ts,
@@ -224,7 +239,11 @@ async function handleEvent(event: SlackEvent): Promise<void> {
   if (event.type === 'app_mention') {
     await checkPostedMessage(event)
   } else if (event.type === 'message') {
-    if (!event.app_id && event.text && !event.text.includes(`<@${botUserId}>`)) {
+    if (
+      !event.app_id &&
+      event.text &&
+      !event.text.includes(`<@${botUserId}>`)
+    ) {
       await checkPostedMessage(event)
     }
   } else if (event.type === 'reaction_added') {
