@@ -220,8 +220,9 @@ export async function getMessage(params: GetMessageParams) {
   bodyBuilder.set('inclusive', 'true')
   bodyBuilder.set('limit', '1')
   bodyBuilder.set('oldest', params.ts)
+  bodyBuilder.set('ts', params.ts)
   const res = await fetch(
-    `https://slack.com/api/conversations.history?${bodyBuilder.toString()}`,
+    `https://slack.com/api/conversations.replies?${bodyBuilder.toString()}`,
     {
       headers: {
         Authorization: `Bearer ${SLACK_BOT_OAUTH_TOKEN}`,
