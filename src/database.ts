@@ -31,13 +31,13 @@ export async function setUserHint(userId: string): Promise<void> {
 // user optouts
 
 export async function getUserOptout(userId: string): Promise<boolean> {
-  return !!(await getValue(`optout.${userId}`))
+  return !(await getValue(`optin.${userId}`))
 }
 
 export async function optoutUser(userId: string): Promise<void> {
-  await setValue(`optout.${userId}`, '1')
+  await deleteValue(`optin.${userId}`)
 }
 
 export async function optinUser(userId: string): Promise<void> {
-  await deleteValue(`optout.${userId}`)
+  await setValue(`optin.${userId}`, '1')
 }
