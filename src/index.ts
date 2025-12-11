@@ -127,6 +127,7 @@ async function sendMessageOrReact(
     !(await getUserOptout(message.user)) ||
     message.text.includes(`<@${botUserId}>`)
   if (!shouldMessage) {
+    return // skip the reaction
     return await addReaction({
       channel: message.channel,
       name: REACTION_EMOJI,
